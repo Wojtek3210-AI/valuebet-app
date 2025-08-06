@@ -1,3 +1,7 @@
+ModuleNotFoundError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+Traceback:
+File "/mount/src/valuebet-app/app.py", line 5, in <module>
+    from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -35,14 +39,19 @@ params = {"league": liga_id, "season": 2024, "next": 10}
 try:
     response = requests.get("https://api-football-v1.p.rapidapi.com/v3/fixtures", headers=auth_headers, params=params)
     data = response.json()
-    spiele = data.get("response", [])
+    spiele = [s for s in data.get("response", []) if s.get("league", {}).get("id") == liga_id]
 
     if not spiele:
-        st.warning("⚠️ Für diese Liga wurden keine anstehenden Spiele gefunden.")
+        st.warning("⚠️ Für diese Liga wurden keine gültigen Spiele gefunden (evtl. liegt es an der API-Saisonangabe).")
     else:
         for s in spiele:
-            teams = s['teams']
-            st.write(f"{teams['home']['name']} vs {teams['away']['name']} ({s['fixture']['date'][:10]})")
+            try:
+                home = s['teams']['home']['name']
+                away = s['teams']['away']['name']
+                datum = s['fixture']['date'][:10]
+                st.write(f"{home} vs {away} ({datum})")
+            except Exception as e:
+                st.error(f"⚠️ Fehler beim Parsen eines Spiels: {e}")
 except Exception as e:
     st.error(f"Fehler beim Laden der Spieldaten: {e}")
 
