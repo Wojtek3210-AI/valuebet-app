@@ -41,12 +41,14 @@ match_data = {
     "injury_adjustment_team_b": 0.95
 }
 
-# Calculate expected goals (xG) - Fixed syntax error
+# Calculate expected goals (xG)
 def calculate_xg(team_avg_goals, opp_avg_conceded, adjustment=1.0):
+    """Calculate expected goals (xG) with injury adjustment."""
     return (team_avg_goals + opp_avg_conceded) / 2 * adjustment
 
 # Predict probabilities using Poisson distribution
 def predict_probabilities(team1_xg, team2_xg, threshold):
+    """Calculate Over/Under probabilities using Poisson distribution."""
     total_xg = team1_xg + team2_xg
     over_prob = 1 - poisson.cdf(threshold - 0.5, total_xg)
     under_prob = poisson.cdf(threshold + 0.5, total_xg)
@@ -54,10 +56,12 @@ def predict_probabilities(team1_xg, team2_xg, threshold):
 
 # Calculate value bet
 def calculate_value(pred_prob, odds):
+    """Calculate betting value: (predicted probability * odds) - 1."""
     return (pred_prob * odds) - 1
 
 # Function to generate PDF
 def generate_pdf(team_a, team_b, table_data):
+    """Generate a PDF with prediction results."""
     buffer = io.BytesIO()
     pdf_file = f"{team_a}_vs_{team_b}_Betting_Predictions.pdf"
     doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -79,7 +83,7 @@ def generate_pdf(team_a, team_b, table_data):
 # Process predictions when form is submitted
 if submit_button:
     # Input validation
-    if not team_a or not team_b:
+    if not team_a.strip() or not team_b.strip():
         st.error("Please enter valid team names.")
     else:
         # Calculate xG for full match, first half, and second half
@@ -130,7 +134,7 @@ if submit_button:
         under_1_5_2h_value = calculate_value(under_1_5_2h_prob, match_data["odds_under_1_5_2h"])
         sh_recommended = "Over 1.5 2H" if over_1_5_2h_value > under_1_5_2h_value and over_1_5_2h_value > 0 else "Under 1.5 2H"
 
-        # Prepare table data
+        # Prepare table data with corrected f-strings
         table_data = [
             [
                 "Match",
@@ -142,4 +146,47 @@ if submit_button:
             ],
             [
                 match_data["match"],
-                f"
+                f"Over: {over_2_5_prob:.1%}, Under: {under_2_5_prob:.1%}",
+                f"Over: {over_1_5_ht_prob:.1%}, Under: {under_1_5_ht_prob:.1%}",
+                f"Over: {over_1_5_2h_prob:.1%}, Under: {under_1_5_2h_prob:.1%}",
+                f"{full_recommended}, {ht_recommended}, {sh_recommended}",
+                f"Full: {max(over_2_5_value, under_2_5_value):.2f}, HT: {max(over_1_5_ht_value, under_1_5_ht_value):.2f}, 2H: {max(over_1_5_2h_value, under_1_5_2h_value):.2f}"
+            ]
+        ]
+
+        # Display results in Streamlit
+        st.subheader("Prediction Results")
+        st.table(table_data)
+
+        # Probability visualization
+        st.subheader("Probability Visualization")
+        chart_data = {
+            "type": "bar",
+            "data": {
+                "labels": ["Over 2.5", "Under 2.5", "Over 1.5 HT", "Under 1.5 HT", "Over 1.5 2H", "Under 1.5 2H"],
+                "datasets": [{
+                    "label": "Probability",
+                    "data": [over_2_5_prob, under_2_5_prob, over_1_5_ht_prob, under_1_5_ht_prob, over_1_5_2h_prob, under_1_5_2h_prob],
+                    "backgroundColor": ["#FF6384", "#36A2EB", "#FF6384", "#36A2EB", "#FF6384", "#36A2EB"]
+                }]
+            },
+            "options": {
+                "scales": {
+                    "y": {
+                        "beginAtZero": True,
+                        "max": 1,
+                        "title": {"display": True, "text": "Probability"}
+                    }
+                }
+            }
+        }
+        st.chart(chart_data)
+
+        # Generate and provide PDF download
+        pdf_buffer, pdf_file = generate_pdf(team_a, team_b, table_data)
+        st.download_button(
+            label="Download Predictions PDF",
+            data=pdf_buffer,
+            file_name=pdf_file,
+            mime="application/pdf"
+        )
